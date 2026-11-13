@@ -1,0 +1,200 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidPrivacy(priv) {
+      return priv is map
+        && priv.keys().hasAll([
+          'shareCheckIns',
+          'shareAppointments',
+          'shareWithOB',
+          'shareWithTherapist',
+          'shareWithPartner',
+          'expiryOption',
+          'anonymousInCommunity'
+        ])
+        && priv.keys().hasOnly([
+          'shareCheckIns',
+          'shareAppointments',
+          'shareWithOB',
+          'shareWithTherapist',
+          'shareWithPartner',
+          'expiryOption',
+          'anonymousInCommunity'
+        ])
+        && priv.shareCheckIns is bool
+        && priv.shareAppointments is bool
+        && priv.shareWithOB is bool
+        && priv.shareWithTherapist is bool
+        && priv.shareWithPartner is bool
+        && priv.expiryOption is string
+        && priv.expiryOption.size() >= 1
+        && priv.expiryOption.size() <= 32
+        && priv.expiryOption in ['30 days', '90 days', 'Until revoked']
+        && priv.anonymousInCommunity is bool;
+    }
+
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll([
+          'uid',
+          'firstName',
+          'babyName',
+          'babyDateInput',
+          'babyDateLabel',
+          'selectedGoals',
+          'suggestedGroupIds',
+          'privacy',
+          'completed',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid',
+          'firstName',
+          'babyName',
+          'babyDateInput',
+          'babyDateLabel',
+          'selectedGoals',
+          'suggestedGroupIds',
+          'privacy',
+          'niaInsights',
+          'completed',
+          'createdAt',
+          'updatedAt'
+        ])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.uid == userId
+        && data.firstName is string
+        && data.firstName.size() >= 1
+        && data.firstName.size() <= 80
+        && data.babyName is string
+        && data.babyName.size() >= 1
+        && data.babyName.size() <= 80
+        && data.babyDateInput is string
+        && data.babyDateInput.size() == 10
+        && data.babyDateInput.matches('^\\d{4}-\\d{2}-\\d{2}$')
+        && data.babyDateLabel is string
+        && data.babyDateLabel.size() >= 1
+        && data.babyDateLabel.size() <= 120
+        && data.selectedGoals is list
+        && data.selectedGoals.size() >= 1
+        && data.selectedGoals.size() <= 2
+        && data.selectedGoals[0] is string
+        && data.selectedGoals[0].size() >= 1
+        && data.selectedGoals[0].size() <= 60
+        && data.suggestedGroupIds is list
+        && data.suggestedGroupIds.size() <= 5
+        && (data.suggestedGroupIds.size() == 0 || (data.suggestedGroupIds[0] is string && data.suggestedGroupIds[0].size() <= 64))
+        && isValidPrivacy(data.privacy)
+        && (
+          !('niaInsights' in data)
+          || (
+            data.niaInsights is list
+            && data.niaInsights.size() <= 6
+            && (
+              data.niaInsights.size() == 0
+              || (data.niaInsights[0] is string && data.niaInsights[0].size() >= 1 && data.niaInsights[0].size() <= 140)
+            )
+          )
+        )
+        && data.completed is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPrivateAccount(data, userId) {
+      return data.keys().hasAll(['uid', 'email', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.uid == userId
+        && data.email is string
+        && data.email.size() >= 3
+        && data.email.size() <= 254
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+      allow create: if isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['privacy', 'updatedAt'])
+          || incoming().diff(existing()).affectedKeys().hasOnly(['niaInsights', 'updatedAt'])
+          || incoming().diff(existing()).affectedKeys().hasOnly([
+            'firstName',
+            'babyName',
+            'babyDateInput',
+            'babyDateLabel',
+            'selectedGoals',
+            'suggestedGroupIds',
+            'privacy',
+            'completed',
+            'updatedAt'
+          ])
+        );
+      allow delete: if isValidId(userId) && isOwner(userId);
+
+      match /private/{docId} {
+        allow get: if isValidId(userId) && docId == 'account' && isOwner(userId);
+        allow list: if false;
+        allow create: if isValidId(userId)
+          && docId == 'account'
+          && isOwner(userId)
+          && isValidPrivateAccount(incoming(), userId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && (
+            exists(/databases/$(database)/documents/users/$(userId))
+            || existsAfter(/databases/$(database)/documents/users/$(userId))
+          );
+        allow update: if isValidId(userId)
+          && docId == 'account'
+          && isOwner(userId)
+          && isValidPrivateAccount(incoming(), userId)
+          && incoming().uid == existing().uid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['email', 'updatedAt'])
+          && exists(/databases/$(database)/documents/users/$(userId));
+        allow delete: if isValidId(userId) && docId == 'account' && isOwner(userId);
+      }
+    }
+  }
+}

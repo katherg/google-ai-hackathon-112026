@@ -1,0 +1,175 @@
+{
+  "entities": {
+    "PrivacyPreferences": {
+      "title": "PrivacyPreferences",
+      "description": "User-selected privacy and data sharing controls chosen during onboarding or in Privacy center.",
+      "type": "object",
+      "properties": {
+        "shareCheckIns": {
+          "type": "boolean",
+          "description": "Whether mood check-ins and EPDS scores may be shared."
+        },
+        "shareAppointments": {
+          "type": "boolean",
+          "description": "Whether appointment details may be shared."
+        },
+        "shareWithOB": {
+          "type": "boolean",
+          "description": "Whether OB or midwife may view consented data."
+        },
+        "shareWithTherapist": {
+          "type": "boolean",
+          "description": "Whether therapist may view consented data."
+        },
+        "shareWithPartner": {
+          "type": "boolean",
+          "description": "Whether partner may view consented data."
+        },
+        "expiryOption": {
+          "type": "string",
+          "enum": ["30 days", "90 days", "Until revoked"],
+          "maxLength": 32,
+          "description": "Optional consent expiry window."
+        },
+        "anonymousInCommunity": {
+          "type": "boolean",
+          "description": "Whether community replies and posts default to anonymous."
+        }
+      },
+      "required": [
+        "shareCheckIns",
+        "shareAppointments",
+        "shareWithOB",
+        "shareWithTherapist",
+        "shareWithPartner",
+        "expiryOption",
+        "anonymousInCommunity"
+      ]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Mother's onboarding choices, baby milestone date, focus goals, and privacy center preferences.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the owning user."
+        },
+        "firstName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Mother's first name."
+        },
+        "babyName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Baby's name or nickname."
+        },
+        "babyDateInput": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "description": "Baby birthday or due date in YYYY-MM-DD format."
+        },
+        "babyDateLabel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Formatted display label for baby age or due date."
+        },
+        "selectedGoals": {
+          "type": "array",
+          "description": "Up to 2 selected postpartum support goals."
+        },
+        "suggestedGroupIds": {
+          "type": "array",
+          "description": "Matched support group identifiers (up to 5)."
+        },
+        "privacy": {
+          "type": "object",
+          "$ref": "#/entities/PrivacyPreferences",
+          "description": "Privacy center preferences selected at signup or updated later."
+        },
+        "niaInsights": {
+          "type": "array",
+          "description": "Up to 6 short non-medical personal preferences and context notes Nia has learned during conversations."
+        },
+        "completed": {
+          "type": "boolean",
+          "description": "Whether initial onboarding is complete."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server last update timestamp."
+        }
+      },
+      "required": [
+        "uid",
+        "firstName",
+        "babyName",
+        "babyDateInput",
+        "babyDateLabel",
+        "selectedGoals",
+        "suggestedGroupIds",
+        "privacy",
+        "completed",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "UserPrivateAccount": {
+      "title": "UserPrivateAccount",
+      "description": "Isolated PII record storing the authenticated user's email address.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the owning user."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "minLength": 3,
+          "maxLength": 254,
+          "description": "User account email address."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server last update timestamp."
+        }
+      },
+      "required": ["uid", "email", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Owner-only onboarding profile, goals, and Privacy Center settings."
+    },
+    "/users/{userId}/private/account": {
+      "schema": { "$ref": "#/entities/UserPrivateAccount" },
+      "description": "Isolated owner-only PII subdocument holding account email."
+    }
+  }
+}

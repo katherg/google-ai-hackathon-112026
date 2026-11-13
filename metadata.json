@@ -1,0 +1,10 @@
+{
+  "name": "Remix NewMomHub",
+  "description": "Find your people and get support after birth. Postpartum community, proactive AI companion, local resources, and baby stage guidance for new mothers.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
